@@ -52,99 +52,119 @@ module RDL::Type
 
     ## Adds an upper bound to self, and transitively pushes it to all of self's lower bounds.
     # [+ typ +] is the Type to add as upper bound.
-    # [+ ast +] is the AST where the bound originates from, used for error messages.
-    # [+ new_cons +] is a Hash<VarType, Array<[:upper or :lower, Type, AST]>>. When provided, can be used to roll back constraints in case an error pops up.
-    def add_and_propagate_upper_bound(typ, ast, new_cons = {})
-
+    # [+ ast +] is the AST corresponding to the bound that is currently being propagated (for reporting errors).
+    # [+ new_cons +] is a list of VarTypeBound elements. When provided, it can be used to roll back constraints
+    # in case an error pops up. Each constraint comes with the list of constraints that lead to it
+    # [+ causes + ] - list of VarTypeBound that led to this call
+    def add_and_propagate_upper_bound(typ, ast, new_cons = [], causes = [])
       return if self.equal?(typ)
-      if !@ubounds.any? { |t, a| t == typ }
-        @ubounds << [typ, ast]
-        new_cons[self] = new_cons[self] ? new_cons[self] | [[:upper, typ, ast]] : [[:upper, typ, ast]]
+      RDL::Logging.log :typecheck, :trace,  "#{self} <= #{typ}"
+      bound = add_ubound typ, ast, new_cons, causes, propagate: false
+
+      if typ.is_a?(VarType) && !typ.lbounds
+        RDL::Logging.debug_error :inference, "Nil found in lbounds... Returning"
+        return
       end
-      @lbounds.each { |lower_t, a|
-        if typ.is_a?(VarType) && !typ.lbounds
-          RDL::Logging.debug_error :inference, "Nil found in lbounds... Continuing"
-          next
-        end
+
+      RDL::Logging.log :typecheck, :trace, 'lbounds.each'
+      @lbounds.each { |lbound|
+
+        lower_t = lbound.bound_type
+        causes = [bound, lbound]
+        RDL::Logging.log :typecheck, :trace, "lbound: #{lower_t}"
 
         if lower_t.is_a?(VarType) && lower_t.to_infer
-          lower_t.add_and_propagate_upper_bound(typ, ast, new_cons) unless lower_t.ubounds.any? { |t, _| t == typ }
+          lower_t.add_and_propagate_upper_bound(typ, bound.asts, new_cons, causes) unless lower_t.ubounds.any? { |b| b.bound_type == typ }
         else
-          if typ.is_a?(VarType) && !typ.lbounds.any? { |t, _| t == lower_t }
-            new_cons[typ] = new_cons[typ] ? new_cons[typ] | [[:lower, lower_t, ast]] : [[:lower, lower_t, ast]]
+          if typ.is_a?(VarType) && !typ.lbounds.any? { |b| b.bound_type == lower_t }
+            new_bound = VarTypeBound.new(typ, lower_t, :lower, bound.asts, causes)
+            new_cons.append(new_bound)
           end
-          unless RDL::Type::Type.leq(lower_t, typ, {}, false, ast: ast, no_constraint: true, propagate: true, new_cons: new_cons)
-            d1 = a.nil? ? "" : (Diagnostic.new :note, :infer_constraint_error, [lower_t.to_s], a.loc.expression).render.join("\n")
-            d2 = ast.nil? ? "" : (Diagnostic.new :note, :infer_constraint_error, [typ.to_s], ast.loc.expression).render.join("\n")
-            raise RDL::Typecheck::StaticTypeError, ("Inconsistent type constraint #{lower_t} <= #{typ} generated during inference.\n #{d1}\n #{d2}")
+
+          RDL::Logging.log :typecheck, :trace, "about to check #{lower_t} <= #{typ} with".colorize(:green)
+          RDL::Util.each_leq_constraints(new_cons) { |a, b| RDL::Logging.log(:typecheck, :trace, "#{a} <= #{b}") }
+
+          unless RDL::Type::Type.leq(lower_t, typ, {}, false, ast: bound.asts, no_constraint: true, propagate: true, new_cons: new_cons, causes: causes)
+            d1 = lbound.asts[0].nil? ? "" : (Diagnostic.new :note, :infer_constraint_error, [lower_t.to_s], lbound.asts[0].loc.expression).render.join("\n")
+            d2 = bound.asts[0].nil? ? "" : (Diagnostic.new :note, :infer_constraint_error, [typ.to_s], bound.asts[0].loc.expression).render.join("\n")
+            raise RDL::Typecheck::StaticTypeError.new(causes), ("Inconsistent type constraint #{lower_t} <= #{typ} generated during inference.\n #{d1}\n #{d2}")
           end
+          RDL::Logging.log :typecheck, :trace, "Checked #{lower_t} <= #{typ}".colorize(:green)
         end
       }
     end
 
     ## Similar to above.
-    def add_and_propagate_lower_bound(typ, ast, new_cons = {})
+    def add_and_propagate_lower_bound(typ, ast, new_cons = [], causes = [])
       return if self.equal?(typ)
       RDL::Logging.log :typecheck, :trace,  "#{typ} <= #{self}"
+      bound = add_lbound typ, ast, new_cons, causes, propagate: false
 
-      if !@lbounds.any? { |t, a| t == typ }
-        RDL::Logging.log :typecheck, :trace,  '@lbounds.any'
-        @lbounds << [typ, ast]
-        new_cons[self] = new_cons[self] ? new_cons[self] | [[:lower, typ, ast]] : [[:lower, typ, ast]]
+      if typ.is_a?(VarType) && !typ.ubounds
+        RDL::Logging.debug_error :inference, "Nil found in ubounds... Returning"
+        return
       end
+
       RDL::Logging.log :typecheck, :trace, 'ubounds.each'
-      @ubounds.each { |upper_t, a|
-        if upper_t.is_a?(VarType) && !upper_t.lbounds
-          RDL::Logging.debug_error :inference, "Nil found in upper_t.lbounds... Continuing"
-          next
-        end
+      @ubounds.each { |ubound|
 
-        if typ.is_a?(VarType) && !typ.ubounds
-          RDL::Logging.debug_error :inference, "Nil found in ubounds... Continuing"
-          next
-        end
-
+        upper_t = ubound.bound_type
+        causes = [bound, ubound]
         RDL::Logging.log :typecheck, :trace, "ubound: #{upper_t}"
-        if upper_t.is_a?(VarType)
-          upper_t.add_and_propagate_lower_bound(typ, ast, new_cons) unless upper_t.lbounds.any? { |t, _| t == typ }
-        else
-          if typ.is_a?(VarType) && !typ.ubounds.any? { |t, _| t == upper_t }
-            new_cons[typ] = new_cons[typ] ? new_cons[typ] | [[:upper, upper_t, ast]] : [[:upper, upper_t, ast]]
-          end
-          RDL::Logging.log :typecheck, :trace, "about to check #{typ} <= #{upper_t} with".colorize(:green)
 
+        if upper_t.is_a?(VarType) && upper_t.to_infer
+          upper_t.add_and_propagate_lower_bound(typ, bound.asts, new_cons, causes) unless upper_t.lbounds.any? { |b| b.bound_type == typ }
+        else
+          if typ.is_a?(VarType) && !typ.ubounds.any? { |b| b.bound_type == upper_t }
+            new_bound = VarTypeBound.new(typ, upper_t, :upper, bound.asts, causes)
+            new_cons.append(new_bound)
+          end
+
+          RDL::Logging.log :typecheck, :trace, "about to check #{typ} <= #{upper_t} with".colorize(:green)
           RDL::Util.each_leq_constraints(new_cons) { |a, b| RDL::Logging.log(:typecheck, :trace, "#{a} <= #{b}") }
 
-          unless RDL::Type::Type.leq(typ, upper_t, {}, false, ast: ast, no_constraint: true, propagate: true, new_cons: new_cons)
-            d1 = ast.nil? ? "" : (Diagnostic.new :error, :infer_constraint_error, [typ.to_s], ast.loc.expression).render.join("\n")
-            d2 = a.nil? ? "" : (Diagnostic.new :error, :infer_constraint_error, [upper_t.to_s], a.loc.expression).render.join("\n")
-            raise RDL::Typecheck::StaticTypeError, ("Inconsistent type constraint #{typ} <= #{upper_t} generated during inference.\n #{d1}\n #{d2}")
+          unless RDL::Type::Type.leq(typ, upper_t, {}, false, ast: bound.asts, no_constraint: true, propagate: true, new_cons: new_cons, causes: causes)
+            d1 = bound.asts[0].nil? ? "" : (Diagnostic.new :error, :infer_constraint_error, [typ.to_s], bound.asts[0].loc.expression).render.join("\n")
+            d2 = ubound.asts[0].nil? ? "" : (Diagnostic.new :error, :infer_constraint_error, [upper_t.to_s], ubound.asts[0].loc.expression).render.join("\n")
+            raise RDL::Typecheck::StaticTypeError.new(causes), ("Inconsistent type constraint #{typ} <= #{upper_t} generated during inference.\n #{d1}\n #{d2}")
           end
           RDL::Logging.log :typecheck, :trace, "Checked #{typ} <= #{upper_t}".colorize(:green)
         end
       }
     end
 
-    def add_ubound(typ, ast, new_cons = {}, propagate: false)
-      #raise "About to add upper bound #{self} <= #{typ}" if typ.is_a?(VarType) && !typ.to_infer
-      if propagate
-        add_and_propagate_upper_bound(typ, ast, new_cons)
-      elsif !@ubounds.any? { |t, a| t == typ }
-        new_cons[self] = new_cons[self] ? new_cons[self] | [[:upper, typ, ast]] : [[:upper, typ, ast]]
-        @ubounds << [typ, ast] #unless @ubounds.any? { |t, a| t == typ }
+    def add_ubound(typ, ast, new_cons = [], causes = [], propagate: false)
+      # raise "About to add upper bound #{self} <= #{typ}" if typ.is_a?(VarType) && !typ.to_infer
+      return if self.equal?(typ)
+      ast = [ast] unless ast.kind_of?(Array)  # since there can be several places in the AST that cause the same bound
+      if !@ubounds.any? { |b| b.bound_type == typ}
+        return add_and_propagate_upper_bound(typ, ast, new_cons, causes) if propagate
+        bound = VarTypeBound.new(self, typ, :upper, ast, causes)
+        new_cons.append(bound)
+        @ubounds << bound
+      else
+        bound = @ubounds.select {|b| b.bound_type == typ}[0]
+        bound.add_asts(ast) unless propagate
       end
+      bound
     end
 
-    def add_lbound(typ, ast, new_cons = {}, propagate: false)
-      #raise "About to add lower bound #{typ} <= #{self}" if typ.is_a?(VarType) && !typ.to_infer
+    def add_lbound(typ, ast, new_cons = [], causes = [], propagate: false)
+      # raise "About to add lower bound #{typ} <= #{self}" if typ.is_a?(VarType) && !typ.to_infer
       # raise "ChoiceType!!!!" if typ.is_a? ChoiceType
+      return if self.equal?(typ)
+      ast = [ast] unless ast.kind_of?(Array)  # since there can be several places in the AST that cause the same bound
       RDL::Logging.log :typecheck, :trace, "#{self}.add_lbound(#{typ}); " + 'propagate'.colorize(:yellow) + " = #{propagate}"
-      if propagate
-        add_and_propagate_lower_bound(typ, ast, new_cons)
-      elsif !@lbounds.any? { |t, a| t == typ }
-        new_cons[self] = new_cons[self] ? new_cons[self] | [[:lower, typ, ast]] : [[:lower, typ, ast]]
-        @lbounds << [typ, ast] #unless @lbounds.any? { |t, a| t == typ }
+      if !@lbounds.any? { |b| b.bound_type == typ}
+        return add_and_propagate_lower_bound(typ, ast, new_cons, causes) if propagate
+        bound = VarTypeBound.new(self, typ, :lower, ast, causes)
+        new_cons.append(bound)
+        @lbounds << bound
+      else
+        bound = @lbounds.select {|b| b.bound_type == typ}[0]
+        bound.add_asts(ast) unless propagate
       end
+      bound
     end
 
     def to_s # :nodoc:
@@ -225,4 +245,55 @@ module RDL::Type
     end
 
   end
+
+  # A class to store information about a bound on a VarType.
+  class VarTypeBound
+
+    attr_reader :type  # The RDL::Type::VarType for which the bound is defined.
+    attr_reader :bound_type  # The RDL::Type::Type by which @type is bounded.
+    attr_reader :u_or_l  # The bound is either :upper or :lower.
+    attr_reader :asts  # The list of asts from which the bound can be directly inferred (if any). Note that @asts is
+    # a list and not a set because two identical Parser::AST::Nodes found at different locations hash to the same value.
+    attr_reader :causes  # A list of bounds which, when propagated, generate this bound
+    # (note that there might be many such lists)
+
+    def initialize(type, bound_type, u_or_l, asts=[], causes=[])
+      @type = type
+      @bound_type = bound_type
+      @u_or_l = u_or_l
+      @asts = []
+      @causes = causes
+      add_asts asts
+    end
+
+    # Adds asts to the list of asts from which the bound can be inferred if
+    # these asts is not already in the list
+    # @param [Array<Parser::AST::Node>] asts to be added to the list
+    def add_asts(asts)
+      asts.map do
+        |ast| @asts.append(ast) unless (ast == nil) || @asts.any? {|a| (a == ast) && (a.location == ast.location)}
+      end
+    end
+
+    def ==(other)
+      return false if other.nil?
+      @u_or_l == other.u_or_l && @type == other.type && @bound_type == other.bound_type
+    end
+
+    def hash
+      hashcode = @type.hash
+      hashcode = hashcode * 31 + @bound_type.hash
+      @u_or_l == :upper ? hashcode * 2 : hashcode # TODO - not sure that is the most effective approach
+    end
+
+    def to_s
+      asts_as_string = asts.map {|ast|
+        ast.nil? ? "" : (Diagnostic.new :note, :infer_constraint_error, [@bound_type.to_s], ast.loc.expression).render.join("\n")
+      }.join("\n")
+      bound_sign = u_or_l == :lower ? "<=" : ">="
+      "%s %s %s, which comes from:\n%s" % [@type, bound_sign, @bound_type, asts_as_string]
+    end
+
+  end
+
 end

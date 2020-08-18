@@ -8,7 +8,7 @@ $LOAD_PATH << File.dirname(__FILE__) + '/../lib'
 require 'rdl'
 require 'types/core'
 
-# Testing Inference (constraint.rb)
+# Testing Inference (constraint_resolution.rb)
 class TestInfer < Minitest::Test
   extend RDL::Annotate
 

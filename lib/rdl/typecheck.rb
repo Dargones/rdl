@@ -1,7 +1,16 @@
 # coding: utf-8
 module RDL::Typecheck
 
-  class StaticTypeError < StandardError; end
+  class StaticTypeError < StandardError
+    # used to recover the reason inference failed during constraint resolution
+    attr_reader :causes
+
+    def initialize(causes = nil)
+      super
+      @causes = causes
+    end
+  end
+
   class BlockTypeError < StaticTypeError; end
 
   @@empty_hash_type = RDL::Type::FiniteHashType.new(Hash.new, nil)

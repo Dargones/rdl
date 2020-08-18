@@ -45,15 +45,7 @@ class RDL::Util
   end
 
   def self.each_leq_constraints(cons)
-    cons.each_pair do |k, vs|
-      vs.each do |v|
-        if v[0] == :lower
-          yield v[1], k
-        else
-          yield k, v[1]
-        end
-      end
-    end
+    cons.each {|cons| yield cons.u_or_l == :lower ? [cons.bound_type, cons.type] : [cons.type, cons.bound_type]}
     nil
   end
 

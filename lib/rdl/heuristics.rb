@@ -55,9 +55,9 @@ class RDL::Heuristic
   def self.struct_to_nominal(var_type)
     return unless (var_type.category == :arg) || (var_type.category == :var)#(var_type.category == :ivar) || (var_type.category == :cvar) || (var_type.category == :gvar) ## this rule only applies to args and (instance/class/global) variables
     #return unless var_type.ubounds.all? { |t, loc| t.is_a?(RDL::Type::StructuralType) || t.is_a?(RDL::Type::VarType) } ## all upper bounds must be struct types or var types
-    return unless var_type.ubounds.any? { |t, loc| t.is_a?(RDL::Type::StructuralType) } ## upper bounds must include struct type(s)
-    struct_types = var_type.ubounds.select { |t, loc| t.is_a?(RDL::Type::StructuralType) }
-    struct_types.map! { |t, loc| t }
+    return unless var_type.ubounds.any? { |b| b.bound_type.is_a?(RDL::Type::StructuralType) } ## upper bounds must include struct type(s)
+    struct_types = var_type.ubounds.select { |b| b.bound_type.is_a?(RDL::Type::StructuralType) }
+    struct_types.map! { |b| b.bound_type }
     RDL::Logging.log :heuristic, :trace, "Found %d upper bounds of structural type" % struct_types.size
     return if struct_types.empty?
     meth_names = struct_types.map { |st| st.methods.keys }.flatten.uniq
@@ -128,11 +128,11 @@ RDL::Heuristic.add(:hash_access) { |var|
   old_var = var
   var = var.type if old_var.is_a?(RDL::Type::OptionalType)
   types = []
-  var.ubounds.reject { |t, ast| t.is_a?(RDL::Type::VarType) }.each { |t, ast|
-    if t.is_a?(RDL::Type::IntersectionType)
-      types = types + t.types
+  var.ubounds.reject { |b| b.bound_type.is_a?(RDL::Type::VarType) }.each { |b|
+    if b.bound_type.is_a?(RDL::Type::IntersectionType)
+      types = types + b.bound_type.types
     else
-      types << t
+      types << b.bound_type
     end
   }
   if !types.empty? && types.all? { |t| t.is_a?(RDL::Type::StructuralType) && t.methods.all? { |meth, typ| ((meth == :[]) || (meth == :[]=)) && typ.args[0].is_a?(RDL::Type::SingletonType) && typ.args[0].val.is_a?(Symbol)  } }
