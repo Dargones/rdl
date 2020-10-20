@@ -2,6 +2,9 @@ RDL.nowrap :Kernel
 
 RDL.type :Kernel, 'self.Array', '([to_ary: () -> Array<t>]) -> Array<t>'
 RDL.type :Kernel, 'self.Array', '([to_a: () -> Array<t>]) -> Array<t>'
+# RDL.type :Kernel, 'self.Array', '(Symbol) -> Array<Symbol>'  # works also for strings and some other object as well,
+# even though they don't have to_a or to_ary methods defined. However, the documentation is silent about the use of
+# Array method in this way, so perhaps this use should not be expanded
 RDL.type :Kernel, 'self.===', "(%any) -> %bool"
 RDL.type :Kernel, 'self.Complex', '(Numeric x, Numeric y) -> Complex'
 RDL.type :Kernel, 'self.Complex', '(String x) -> Complex'
@@ -31,18 +34,22 @@ RDL.type :Kernel, 'self.caller', '(Range) -> Array<String> or nil'
 RDL.type :Kernel, 'self.caller_locations', '(?Integer start, ?Integer length) -> Array<String> or nil'
 RDL.type :Kernel, 'self.caller_locations', '(Range) -> Array<String> or nil'
 RDL.type :Kernel, 'self.catch', "(x) { (?x) -> u } -> u"
- RDL.type :Kernel, 'self.dup', '() -> self'
+RDL.type :Kernel, 'self.dup', '() -> self'
 RDL.type :Kernel, 'self.eval', '(String, ?Binding, ?String filename, ?Integer lineno) -> %any'
 # RDL.type :Kernel, 'self.exec' #TODO
 RDL.type :Kernel, 'self.exit', '() -> %bot'
 RDL.type :Kernel, 'self.exit', '(Integer or %bool status) -> %bot'
+RDL.type :Kernel, 'self.exit!', '() -> %bot'
 RDL.type :Kernel, 'self.exit!', '(Integer or %bool status) -> %bot'
 RDL.type :Kernel, 'self.fail', '() -> %bot'
 RDL.type :Kernel, 'self.fail', '(String) -> %bot'
+RDL.type :Kernel, 'self.fail', '(Class) -> %bot'
+RDL.type :Kernel, 'self.fail', '(Exception) -> %bot'
 RDL.type :Kernel, 'self.fail', '(Class, Array<String>) -> %bot'
 RDL.type :Kernel, 'self.fail', '(Class, String, ?Array<String>) -> %bot'
 # RDL.type :Kernel, 'self.fail', '(String or [exception : () -> String], ?String, ?Array<String>) -> %any'
-# RDL.type :Kernel, 'self.fork' #TODO
+RDL.type :Kernel, 'self.fork', '() {(*%any) -> %any} -> Integer or nil' # TODO more precise
+RDL.type :Kernel, 'self.fork', '() -> Integer or nil'
 RDL.type :Kernel, 'self.format', '(String format, *%any args) -> String'
 RDL.type :Kernel, 'self.gets', '(?String, ?Integer) -> String'
 RDL.type :Kernel, 'self.global_variables', '() -> Array<Symbol>'
@@ -82,13 +89,18 @@ RDL.type :Kernel, 'self.sleep', '(Numeric duration) -> Integer'
 # RDL.type :Kernel, 'self.spawn' #TODO
 RDL.rdl_alias :Kernel, :'self.sprintf', :'self.format' # TODO: are they aliases?
 RDL.type :Kernel, :sprintf, "(String, %any) -> String"
+RDL.type :Kernel, 'self.srand', '() -> Integer'
 RDL.type :Kernel, 'self.srand', '(Numeric number) -> Integer'
 RDL.type :Kernel, 'self.syscall', '(Integer num, *%any args) -> %any' # TODO : ?
 # RDL.type :Kernel, 'self.system' # TODO
 RDL.type :Kernel, 'self.test', '(String cmd, String file1, ?String file2) -> %bool or Time' # TODO: better, dependent RDL.type?
 # RDL.type :Kernel, 'self.throw' # TODO
 # RDL.type :Kernel, 'self.trace_var' # TODO
-# RDL.type :Kernel, 'self.trap' # TODO
+# TODO?:
+# RDL.type :Kernel, 'self.trap', '(String, String) -> %any'
+# RDL.type :Kernel, 'self.trap', '(Integer, String) -> %any'
+# RDL.type :Kernel, 'self.trap', '(String, {(*%any) -> %any}) -> %any'
+# RDL.type :Kernel, 'self.trap', '(Integer, {(*%any) -> %any}) -> %any'
 # RDL.type :Kernel, 'self.untrace_var' # TODO
 RDL.type :Kernel, 'self.warn', '(*String msg) -> nil'
 RDL.type :Kernel, :clone, '() -> self'

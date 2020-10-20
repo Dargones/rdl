@@ -290,8 +290,12 @@ module RDL::Type
       asts_as_string = asts.map {|ast|
         ast.nil? ? "" : (Diagnostic.new :note, :infer_constraint_error, [@bound_type.to_s], ast.loc.expression).render.join("\n")
       }.join("\n")
-      bound_sign = u_or_l == :lower ? "<=" : ">="
-      "%s %s %s, which comes from:\n%s" % [@type, bound_sign, @bound_type, asts_as_string]
+      bound_sign = u_or_l == :lower ? ">=" : "<="
+      "%s %s %s (%s), which comes from:\n%s" % [@type, bound_sign, @bound_type, @bound_type.class.to_s, asts_as_string]
+    end
+
+    def to_s_short
+      @type.to_s + (@u_or_l == :upper ? "<=" : ">=") + @bound_type.to_s
     end
 
   end

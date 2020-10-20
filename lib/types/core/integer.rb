@@ -138,6 +138,7 @@ RDL.type :Integer, :fdiv, '(Complex) -> ``sing_or_type(trec, targs, :fdiv, "Comp
 RDL.pre(:Integer, :fdiv) { |x| if (x.real.is_a?(BigDecimal)||x.imaginary.is_a?(BigDecimal)) then (if x.real.is_a?(Float) then (x.real!=Float::INFINITY && !(x.real.nan?)) elsif(x.imaginary.is_a?(Float)) then x.imaginary!=Float::INFINITY && !(x.imaginary.nan?) else true end) else true end && if (x.real.is_a?(Rational) && x.imaginary.is_a?(Float)) then !x.imaginary.nan? else true end}
 
 RDL.type :Integer, :to_s, '() -> String'
+RDL.type :Integer, :to_s, '(Integer) -> String'
 RDL.type :Integer, :inspect, '() -> String'
 
 RDL.type :Integer, :magnitude, '() -> Integer r {{ r>=0 }}' ## TODO
@@ -336,6 +337,7 @@ RDL.type :Integer, :fdiv, '(Complex) -> Complex'
 RDL.pre(:Integer, :fdiv) { |x| if (x.real.is_a?(BigDecimal)||x.imaginary.is_a?(BigDecimal)) then (if x.real.is_a?(Float) then (x.real!=Float::INFINITY && !(x.real.nan?)) elsif(x.imaginary.is_a?(Float)) then x.imaginary!=Float::INFINITY && !(x.imaginary.nan?) else true end) else true end && if (x.real.is_a?(Rational) && x.imaginary.is_a?(Float)) then !x.imaginary.nan? else true end}
 
 RDL.type :Integer, :to_s, '() -> String'
+RDL.type :Integer, :to_s, '(Integer) -> String'
 RDL.type :Integer, :inspect, '() -> String'
 
 RDL.type :Integer, :magnitude, '() -> Integer r {{ r>=0 }}'

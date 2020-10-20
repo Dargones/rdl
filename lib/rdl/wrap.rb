@@ -874,9 +874,11 @@ module RDL
     }
 
     RDL::Globals.to_infer[sym] = Set.new
-    RDL::Typecheck.resolve_constraints
+    removed_constraints = RDL::Typecheck.resolve_constraints
 
     report = RDL::Typecheck.extract_solutions
+
+    RDL::Typecheck.generate_typecasts removed_constraints
 
     report.to_csv 'infer_data_new.csv' if render_report
     report.to_sorbet 'infer_data.rbi' if render_report

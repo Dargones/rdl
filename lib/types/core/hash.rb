@@ -277,6 +277,8 @@ RDL.type :Hash, :to_s, '() -> String'
 RDL.type :Hash, :inspect, '() -> String'
 RDL.type :Hash, :invert, '() -> ``invert_output(trec)``'
 
+RDL.type :Hash, :sort_by, '() { (``promoted_or_k(trec)``, ``promoted_or_v(trec)``) -> %any } -> self'
+
 
 def Hash.invert_output(trec)
   case trec
@@ -343,6 +345,10 @@ def Hash.merge_output(trec, targs, mutate=false)
     when RDL::Type::GenericType
       ret = (if mutate then "Hash<k, v>" else "Hash<a or k, b or v>" end)
       return RDL::Globals.parser.scan_str "#T #{ret}"
+    when RDL::Type::VarType
+      ## Return Hash<x, y> for fresh vars x and y.
+      return RDL::Type::GenericType.new(RDL::Globals.types[:hash], RDL::Type::VarType.new(cls: targs[0].cls, meth: targs[0].meth, category: :hash_param_key, name: "hash_param_key_#{targs[0].name}"),
+                                        RDL::Type::VarType.new(cls: targs[0].cls, meth: targs[0].meth, category: :hash_param_val, name: "hash_param_val_#{targs[0].name}"))
     else
       ## targs[0] should just be hash here
       return RDL::Globals.types[:hash]
@@ -375,6 +381,10 @@ def Hash.merge_output(trec, targs, mutate=false)
       else
         return RDL::Type::GenericType.new(arg0.base, key_union, value_union)
       end
+    when RDL::Type::VarType
+      ## Return Hash<x, y> for fresh vars x and y.
+      return RDL::Type::GenericType.new(RDL::Globals.types[:hash], RDL::Type::VarType.new(cls: targs[0].cls, meth: targs[0].meth, category: :hash_param_key, name: "hash_param_key_#{targs[0].name}"),
+                                        RDL::Type::VarType.new(cls: targs[0].cls, meth: targs[0].meth, category: :hash_param_val, name: "hash_param_val_#{targs[0].name}"))
     else
       ## targs[0] should just be Hash here
       return RDL::Globals.types[:hash]
@@ -409,7 +419,7 @@ end
 RDL.type Hash, 'self.shift_output', "(RDL::Type::Type) -> RDL::Type::Type", typecheck: :type_code, wrap: false
 
 #RDL.type :Hash, :to_a, '() -> ``output_type(trec, targs, :to_a, "Array<[k, v]>")``'
-RDL.type :Hash, :to_a, '() -> ``to_a_output_type(trec)")``'
+RDL.type :Hash, :to_a, '() -> ``to_a_output_type(trec)``'
 
 def Hash.to_a_output_type(trec)
   case trec
